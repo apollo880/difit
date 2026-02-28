@@ -94,6 +94,7 @@ function App() {
   const {
     comments,
     addComment,
+    addCommentsBatch,
     removeComment,
     updateComment,
     clearAllComments,
@@ -109,7 +110,7 @@ function App() {
 
   // Fetch and merge preloaded comments from server
   usePreloadedComments({
-    addComment,
+    addCommentsBatch,
     comments,
     ready: diffData !== null,
   });
