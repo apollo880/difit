@@ -1,6 +1,6 @@
 {
   "name": "difit",
-  "version": "3.1.12",
+  "version": "3.1.15",
   "description": "A lightweight command-line tool that spins up a local web server to display Git commit diffs in a GitHub-like Files changed view",
   "keywords": [
     "cli",
@@ -65,7 +65,7 @@
     "diff": "^8.0.2",
     "express": "^5.1.0",
     "ink": "^6.0.1",
-    "lucide-react": "^0.563.0",
+    "lucide-react": "^0.575.0",
     "open": "^11.0.0",
     "prism-react-renderer": "^2.4.1",
     "prismjs": "^1.30.0",
@@ -92,9 +92,9 @@
     "happy-dom": "^20.0.0",
     "knip": "^5.83.0",
     "lefthook": "^2.0.0",
-    "oxfmt": "^0.34.0",
+    "oxfmt": "^0.35.0",
     "oxlint": "^1.49.0",
-    "oxlint-tsgolint": "^0.14.1",
+    "oxlint-tsgolint": "^0.15.0",
     "playwright": "^1.54.1",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.11",
@@ -106,5 +106,5 @@
   "engines": {
     "node": ">=21.0.0"
   },
-  "packageManager": "pnpm@10.29.3"
+  "packageManager": "pnpm@10.30.2"
 }

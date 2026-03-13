@@ -4,6 +4,41 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [3.1.15] - 2026-03-09
+
+### Changed
+
+- Update all development dependencies (#235)
+- Update knip to v5.84.0 (#234)
+
+### Fixed
+
+- Clear resolved comments from stdout output
+
+## [3.1.14] - 2026-03-04
+
+### Added
+
+- Add Zed support for open-in-editor
+
+### Changed
+
+- Update pnpm to v10.30.0 (#233)
+- Update all dependencies (#231)
+- Update all development dependencies (#230)
+
+## [3.1.13] - 2026-03-02
+
+### Changed
+
+- Auto-close sidebar on mobile file selection (#229)
+- Show mobile file tree on the right side
+- Persist sidebar open state
+
+### Thanks
+
+- [@yasunogithub](https://github.com/yasunogithub) for auto-close sidebar behavior on mobile file selection (#229)
+
 ## [3.1.12] - 2026-02-28
 
 ### Added
@@ -955,7 +990,10 @@ All notable changes to this project will be documented in this file.
 
 - First stable release 🌱
 
-[Unreleased]: https://github.com/yoshiko-pg/difit/compare/v3.1.12...HEAD
+[Unreleased]: https://github.com/yoshiko-pg/difit/compare/v3.1.15...HEAD
+[3.1.15]: https://github.com/yoshiko-pg/difit/compare/v3.1.14...v3.1.15
+[3.1.14]: https://github.com/yoshiko-pg/difit/compare/v3.1.13...v3.1.14
+[3.1.13]: https://github.com/yoshiko-pg/difit/compare/v3.1.12...v3.1.13
 [3.1.12]: https://github.com/yoshiko-pg/difit/compare/v3.1.11...v3.1.12
 [3.1.11]: https://github.com/yoshiko-pg/difit/compare/v3.1.10...v3.1.11
 [3.1.10]: https://github.com/yoshiko-pg/difit/compare/v3.1.9...v3.1.10

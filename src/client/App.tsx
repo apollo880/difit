@@ -39,6 +39,7 @@ import { findCommentPosition } from './utils/navigation/positionHelpers';
 const EMPTY_COMMENTS: Comment[] = [];
 const EMPTY_MERGED_CHUNKS: MergedChunk[] = [];
 const SIDEBAR_WIDTH_STORAGE_KEY = 'difit.sidebarWidth';
+const SIDEBAR_OPEN_STORAGE_KEY = 'difit.sidebarOpen';
 const SIDEBAR_MIN_WIDTH = 200;
 const SIDEBAR_MAX_WIDTH = 600;
 const SIDEBAR_DEFAULT_WIDTH = 280;
@@ -58,6 +59,23 @@ const getInitialSidebarWidth = () => {
   return Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, parsed));
 };
 
+const getInitialFileTreeOpen = () => {
+  if (typeof window === 'undefined') {
+    return true;
+  }
+  const stored = window.localStorage.getItem(SIDEBAR_OPEN_STORAGE_KEY);
+  if (stored === null) {
+    return true;
+  }
+  if (stored === 'true') {
+    return true;
+  }
+  if (stored === 'false') {
+    return false;
+  }
+  return true;
+};
+
 function App() {
   const [diffData, setDiffData] = useState<DiffResponse | null>(null);
   const [diffMode, setDiffMode] = useState<DiffViewMode>(DEFAULT_DIFF_VIEW_MODE);
@@ -68,7 +86,7 @@ function App() {
   const [isCopiedAll, setIsCopiedAll] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(getInitialSidebarWidth);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isFileTreeOpen, setIsFileTreeOpen] = useState(true);
+  const [isFileTreeOpen, setIsFileTreeOpen] = useState(getInitialFileTreeOpen);
   const [isDragging, setIsDragging] = useState(false);
   const [showSparkles, setShowSparkles] = useState(false);
   const [hasTriggeredSparkles, setHasTriggeredSparkles] = useState(false);
@@ -118,6 +136,21 @@ function App() {
         body: comment.body,
         timestamp: comment.createdAt,
         codeContent: comment.codeSnapshot?.content,
+        side: comment.position.side,
+      })),
+    [comments],
+  );
+  const commentsForServer = useMemo<Comment[]>(
+    () =>
+      comments.map((comment) => ({
+        id: comment.id,
+        file: comment.filePath,
+        line:
+          typeof comment.position.line === 'number'
+            ? comment.position.line
+            : ([comment.position.line.start, comment.position.line.end] as [number, number]),
+        body: comment.body,
+        timestamp: comment.createdAt,
         side: comment.position.side,
       })),
     [comments],
@@ -482,6 +515,14 @@ function App() {
     }
   }, [sidebarWidth]);
 
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(SIDEBAR_OPEN_STORAGE_KEY, String(isFileTreeOpen));
+    } catch {
+      // Ignore localStorage errors (e.g. disabled storage).
+    }
+  }, [isFileTreeOpen]);
+
   // Fetch revision options on mount
   useEffect(() => {
     fetch('/api/revisions')
@@ -548,49 +589,20 @@ function App() {
 
   // Send comments to server whenever they change and before page unload
   useEffect(() => {
-    // Sync comments whenever they change
-    if (comments.length > 0) {
-      // Transform DiffComment to Comment format for server
-      const transformedComments = comments.map((c) => ({
-        id: c.id,
-        file: c.filePath,
-        line:
-          typeof c.position.line === 'number'
-            ? c.position.line
-            : [c.position.line.start, c.position.line.end],
-        body: c.body,
-        timestamp: c.createdAt,
-        side: c.position.side,
-      }));
-      const data = JSON.stringify({ comments: transformedComments });
-      fetch('/api/comments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: data,
-      }).catch((error) => {
-        console.error('Failed to sync comments:', error);
-      });
-    }
+    const data = JSON.stringify({ comments: commentsForServer });
+
+    fetch('/api/comments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: data,
+    }).catch((error) => {
+      console.error('Failed to sync comments:', error);
+    });
 
     // Also handle page unload
     const sendCommentsBeforeUnload = () => {
-      if (comments.length > 0) {
-        // Transform DiffComment to Comment format for server
-        const transformedComments = comments.map((c) => ({
-          id: c.id,
-          file: c.filePath,
-          line:
-            typeof c.position.line === 'number'
-              ? c.position.line
-              : [c.position.line.start, c.position.line.end],
-          body: c.body,
-          timestamp: c.createdAt,
-          side: c.position.side,
-        }));
-        // Use sendBeacon for reliable delivery during page unload
-        const data = JSON.stringify({ comments: transformedComments });
-        navigator.sendBeacon('/api/comments', data);
-      }
+      // Use sendBeacon for reliable delivery during page unload, including empty states.
+      navigator.sendBeacon('/api/comments', data);
     };
 
     window.addEventListener('beforeunload', sendCommentsBeforeUnload);
@@ -598,7 +610,7 @@ function App() {
     return () => {
       window.removeEventListener('beforeunload', sendCommentsBeforeUnload);
     };
-  }, [comments]);
+  }, [commentsForServer]);
 
   // Establish SSE connection for tab close detection
   useEffect(() => {
@@ -974,6 +986,7 @@ function App() {
                 <FileList
                   files={diffData.files}
                   onScrollToFile={scrollFileIntoDiffContainer}
+                  onFileSelected={isMobile ? () => setIsFileTreeOpen(false) : undefined}
                   comments={comments.map((c) => ({
                     id: c.id,
                     file: c.filePath,

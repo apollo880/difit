@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { HotkeysProvider } from 'react-hotkeys-hook';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import '@testing-library/jest-dom';
 
 import { mockFetch } from '../../vitest.setup';
@@ -10,6 +10,12 @@ import { DiffMode } from '../types/watch';
 import { normalizeDiffViewMode } from '../utils/diffMode';
 
 import App from './App';
+import { useViewport } from './hooks/useViewport';
+
+// Mock the useViewport hook
+vi.mock('./hooks/useViewport', () => ({
+  useViewport: vi.fn(() => ({ isMobile: false, isDesktop: true })),
+}));
 
 // Mock the useDiffComments hook
 vi.mock('./hooks/useDiffComments', () => ({
@@ -103,6 +109,10 @@ const renderApp = () => {
     </HotkeysProvider>,
   );
 };
+
+beforeEach(() => {
+  window.localStorage.clear();
+});
 
 const mockDiffResponse: DiffResponse = {
   commit: 'abc123',
@@ -287,6 +297,87 @@ describe('App Component - Clear Comments Functionality', () => {
   });
 });
 
+describe('App Component - Comment sync', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockConfirm.mockReturnValue(false);
+    mockFetch(mockDiffResponse);
+  });
+
+  it('syncs an empty comment list after the last comment is resolved', async () => {
+    mockComments = [
+      {
+        id: 'test-1',
+        filePath: 'test.ts',
+        position: { side: 'new', line: 10 },
+        body: 'Test comment',
+        createdAt: '2024-01-01T00:00:00.000Z',
+        updatedAt: '2024-01-01T00:00:00.000Z',
+      },
+    ];
+
+    const mockGlobalFetch = vi.mocked(global.fetch);
+    const { rerender } = renderApp();
+
+    await waitFor(() => {
+      const commentCalls = mockGlobalFetch.mock.calls.filter(([url]) => url === '/api/comments');
+      expect(commentCalls).toHaveLength(1);
+
+      const [, request] = commentCalls[0] as [string, RequestInit];
+      expect(request.method).toBe('POST');
+      expect(JSON.parse(String(request.body))).toEqual({
+        comments: [
+          expect.objectContaining({
+            id: 'test-1',
+            file: 'test.ts',
+            line: 10,
+            body: 'Test comment',
+          }),
+        ],
+      });
+    });
+
+    mockComments = [];
+    rerender(
+      <HotkeysProvider initiallyActiveScopes={['navigation']}>
+        <App />
+      </HotkeysProvider>,
+    );
+
+    await waitFor(() => {
+      const commentCalls = mockGlobalFetch.mock.calls.filter(([url]) => url === '/api/comments');
+      expect(commentCalls).toHaveLength(2);
+
+      const [, request] = commentCalls[1] as [string, RequestInit];
+      expect(request.method).toBe('POST');
+      expect(JSON.parse(String(request.body))).toEqual({ comments: [] });
+    });
+  });
+
+  it('sends an empty comment list on unload when no comments remain', async () => {
+    mockComments = [];
+
+    renderApp();
+
+    await waitFor(() => {
+      expect(vi.mocked(global.fetch)).toHaveBeenCalledWith(
+        '/api/comments',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ comments: [] }),
+        }),
+      );
+    });
+
+    fireEvent(window, new Event('beforeunload'));
+
+    expect(navigator.sendBeacon).toHaveBeenCalledWith(
+      '/api/comments',
+      JSON.stringify({ comments: [] }),
+    );
+  });
+});
+
 describe('App Component - Diff Mode Persistence', () => {
   it('keeps the selected view mode after triggering refresh', async () => {
     const mockGlobalFetch = vi.mocked(global.fetch);
@@ -311,8 +402,8 @@ describe('App Component - Diff Mode Persistence', () => {
     fireEvent.click(refreshButton);
 
     await waitFor(() => {
-      // 3 calls: initial /api/diff, /api/revisions, and refresh /api/diff
-      expect(mockGlobalFetch).toHaveBeenCalledTimes(3);
+      // 4 calls: initial /api/diff, /api/revisions, initial /api/comments sync, and refresh /api/diff
+      expect(mockGlobalFetch).toHaveBeenCalledTimes(4);
     });
 
     await waitFor(() => {
@@ -412,5 +503,71 @@ describe('DiffResponse clearComments property', () => {
     };
 
     expect(responseWithoutClearComments.clearComments).toBeUndefined();
+  });
+});
+
+describe('App Component - Sidebar persistence', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockComments = [];
+    mockConfirm.mockReturnValue(false);
+    vi.mocked(useViewport).mockReturnValue({ isMobile: false, isDesktop: true });
+    mockFetch(mockDiffResponse);
+  });
+
+  it('restores file tree open state from localStorage', async () => {
+    window.localStorage.setItem('difit.sidebarOpen', 'false');
+
+    renderApp();
+
+    const toggleButton = await screen.findByRole('button', { name: /toggle file tree panel/i });
+    expect(toggleButton).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('persists file tree open state when toggled', async () => {
+    renderApp();
+
+    const toggleButton = await screen.findByRole('button', { name: /toggle file tree panel/i });
+
+    fireEvent.click(toggleButton);
+    await waitFor(() => {
+      expect(window.localStorage.getItem('difit.sidebarOpen')).toBe('false');
+    });
+
+    fireEvent.click(toggleButton);
+    await waitFor(() => {
+      expect(window.localStorage.getItem('difit.sidebarOpen')).toBe('true');
+    });
+  });
+});
+
+describe('App Component - Mobile sidebar auto-close', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockComments = [];
+    mockConfirm.mockReturnValue(false);
+    vi.mocked(useViewport).mockReturnValue({ isMobile: true, isDesktop: false });
+  });
+
+  afterEach(() => {
+    vi.mocked(useViewport).mockReturnValue({ isMobile: false, isDesktop: true });
+  });
+
+  it('closes the sidebar when a file is selected on mobile', async () => {
+    mockFetch(mockDiffResponse);
+    renderApp();
+
+    // Sidebar toggle button
+    const toggleButton = await screen.findByRole('button', { name: /toggle file tree panel/i });
+    expect(toggleButton).toHaveAttribute('aria-expanded', 'true');
+
+    // Wait for file list to render, then click the file row
+    const fileRow = await screen.findByTitle('test.ts');
+    fireEvent.click(fileRow.closest('[data-file-row]')!);
+
+    // Sidebar should now be closed on mobile
+    await waitFor(() => {
+      expect(toggleButton).toHaveAttribute('aria-expanded', 'false');
+    });
   });
 });
